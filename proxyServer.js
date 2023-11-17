@@ -5,27 +5,34 @@ const { createProxyMiddleware, responseInterceptor } = require('http-proxy-middl
 
 const app = express();
 
-// Configuration variable for the target host
 const TARGET_HOST = 'http://example.com'; // Replace with your target host
 
-// Proxy middleware options with response handling
-const options = {
-  target: TARGET_HOST,
-  changeOrigin: true,
-  selfHandleResponse: true, // The proxy will manage the response
-  onProxyRes: responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
-    // Modify or translate the response from the printer here
-    // For example, you can change headers, status code, or the response body
-    const response = responseBuffer.toString('utf8'); // Assuming the response is a string
-    // Perform necessary modifications to the response
-    return response;
-  })
-};
+let proxyMiddleware; // Declare the proxy middleware outside
+
+// Initialize the proxy middleware only once
+function getProxyMiddleware() {
+  if (!proxyMiddleware) {
+    const options = {
+      target: TARGET_HOST,
+      changeOrigin: true,
+      selfHandleResponse: true,
+      onProxyRes: responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
+        const response = responseBuffer.toString('utf8');
+        // Perform modifications to the response
+        return response;
+      })
+    };
+    proxyMiddleware = createProxyMiddleware(options);
+  }
+  return proxyMiddleware;
+}
 
 // Use the proxy middleware
-app.use('/', createProxyMiddleware(options));
+app.use('/', (req, res, next) => {
+  const middleware = getProxyMiddleware();
+  return middleware(req, res, next);
+});
 
-// HTTPS server with self-signed certificate
 https.createServer({
   key: fs.readFileSync('server.key'),
   cert: fs.readFileSync('server.cert')
